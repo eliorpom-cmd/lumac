@@ -73,6 +73,18 @@ final class DisplayController: ObservableObject {
         }
     }
 
+    /// Some displays turn the backlight off at 0, which looks like a dead screen.
+    nonisolated static func range(of code: VCP) -> ClosedRange<Double> { code == .brightness ? 0.1...1 : 0...1 }
+
+    /// Moves a control by `delta`, within its range. Returns false when the display doesn't have it.
+    @discardableResult
+    func step(_ code: VCP, by delta: Double) -> Bool {
+        guard let level = levels[code] else { return false }
+        let range = Self.range(of: code)
+        set(code, to: min(range.upperBound, max(range.lowerBound, level + delta)))
+        return true
+    }
+
     func set(_ code: VCP, to level: Double) {
         guard let maximum = maximums[code] else { return }
         levels[code] = level

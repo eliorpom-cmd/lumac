@@ -4,9 +4,16 @@ import SwiftUI
 @main
 struct LumacApp: App {
     @StateObject private var lid = LidMonitor()
-    @StateObject private var display = DisplayController()
+    @StateObject private var display: DisplayController
+    @StateObject private var keys: BrightnessKeys
     /// Bumped after each login item change so the toggle re-reads the real status.
     @State private var loginItemRevision = 0
+
+    init() {
+        let display = DisplayController()
+        _display = StateObject(wrappedValue: display)
+        _keys = StateObject(wrappedValue: BrightnessKeys(display: display))
+    }
 
     var body: some Scene {
         MenuBarExtra {
@@ -36,6 +43,14 @@ struct LumacApp: App {
 
                 Divider()
 
+                Toggle("Brightness keys control the external display", isOn: $keys.enabled)
+                if keys.enabled, !keys.trusted {
+                    Text("Allow Lumac in Privacy & Security > Accessibility.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Open Settings") { keys.openAccessibilitySettings() }
+                        .controlSize(.small)
+                }
                 Toggle("Sleep when the lid closes", isOn: $lid.enabled)
                 if let lastSleep = lid.lastSleep {
                     Text("Last sleep: \(lastSleep.formatted(date: .omitted, time: .shortened))")
@@ -87,14 +102,11 @@ private struct LevelRow: View {
         HStack(spacing: 8) {
             Image(systemName: symbol)
                 .frame(width: 18)
-            Slider(value: Binding(get: { level }, set: change), in: range)
+            Slider(value: Binding(get: { level }, set: change), in: DisplayController.range(of: code))
                 .accessibilityLabel(title)
         }
         .foregroundStyle(.secondary)
     }
-
-    /// Some displays turn the backlight off at 0, which looks like a dead screen.
-    private var range: ClosedRange<Double> { code == .brightness ? 0.1...1 : 0...1 }
 
     private var symbol: String {
         switch code {

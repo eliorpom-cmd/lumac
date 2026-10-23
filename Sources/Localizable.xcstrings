@@ -1,6 +1,16 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Allow Lumac in Privacy & Security > Accessibility.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorisez Lumac dans Confidentialité et sécurité > Accessibilité."
+          }
+        }
+      }
+    },
     "Brightness": {
       "localizations": {
         "fr": {
@@ -17,6 +27,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Réglage de la luminosité indisponible pour cet écran"
+          }
+        }
+      }
+    },
+    "Brightness keys control the external display": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les touches de luminosité règlent l'écran externe"
           }
         }
       }
@@ -67,6 +87,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aucun écran externe"
+          }
+        }
+      }
+    },
+    "Open Settings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir les Réglages"
           }
         }
       }
