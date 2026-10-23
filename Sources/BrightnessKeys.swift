@@ -2,8 +2,8 @@ import AppKit
 import ApplicationServices
 import CoreGraphics
 
-/// Lets the keyboard's brightness keys drive the external display when the pointer is on it,
-/// or whenever the built-in display is off. Otherwise the keys keep their usual effect.
+/// Lets the keyboard's brightness keys drive the display under the pointer, built-in or external,
+/// with an indicator that names the display being adjusted.
 ///
 /// Intercepting the keys takes an event tap, which needs the Accessibility permission.
 @MainActor
@@ -17,6 +17,8 @@ final class BrightnessKeys: ObservableObject {
     @Published private(set) var trusted = AXIsProcessTrusted()
 
     private let display: DisplayController
+    private let builtIn: BuiltInBrightness
+    private let sync: BrightnessSync
     private var tap: CFMachPort?
     private var trustTimer: Timer?
 
@@ -30,8 +32,10 @@ final class BrightnessKeys: ObservableObject {
     private static let brightnessUp = 2
     private static let brightnessDown = 3
 
-    init(display: DisplayController) {
+    init(display: DisplayController, builtIn: BuiltInBrightness, sync: BrightnessSync) {
         self.display = display
+        self.builtIn = builtIn
+        self.sync = sync
         enabled = UserDefaults.standard.bool(forKey: "brightnessKeys")
         update(prompt: false)
     }
@@ -94,7 +98,7 @@ final class BrightnessKeys: ObservableObject {
         self.tap = nil
     }
 
-    /// Returns true when the event was used for the external display and must not reach macOS.
+    /// Returns true when the event was used for a display and must not reach macOS.
     private func handle(type: CGEventType, event: CGEvent) -> Bool {
         // macOS disables a tap that is too slow or when secure input starts: turn it back on.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
@@ -107,24 +111,37 @@ final class BrightnessKeys: ObservableObject {
         else { return false }
 
         let key = (nsEvent.data1 & 0xFFFF_0000) >> 16
-        guard key == Self.brightnessUp || key == Self.brightnessDown, externalIsTarget() else { return false }
+        guard key == Self.brightnessUp || key == Self.brightnessDown else { return false }
+        let screen = targetScreen()
+        let builtInTarget = screen.map(Self.isBuiltIn) ?? false
         // Key down (0xA) and repeats move the level; key up (0xB) is swallowed with them.
         let keyDown = (nsEvent.data1 & 0xFF00) >> 8 == 0xA
-        if keyDown {
-            return display.step(.brightness, by: key == Self.brightnessUp ? Self.step : -Self.step)
+        let delta = key == Self.brightnessUp ? Self.step : -Self.step
+
+        if builtInTarget {
+            // When DisplayServices can't set it, macOS handles the key as usual.
+            guard keyDown else { return BuiltInBrightness.read() != nil }
+            guard builtIn.step(by: delta), let level = builtIn.level else { return false }
+            LevelHUD.shared.show(name: String(localized: "Built-in display"), builtIn: true, level: level, on: screen)
+            return true
         }
-        return display.brightness != nil
+
+        guard keyDown else { return display.brightness != nil }
+        guard display.step(.brightness, by: delta), let level = display.brightness else { return false }
+        sync.externalAdjusted(to: level)
+        LevelHUD.shared.show(name: screen?.localizedName ?? String(localized: "External display"), builtIn: false, level: level, on: screen)
+        return true
     }
 
-    private func externalIsTarget() -> Bool {
+    /// The screen under the pointer; with the lid closed, the pointer can only be on an external one.
+    private func targetScreen() -> NSScreen? {
         let pointer = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(pointer, $0.frame, false) }
-        let id = screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
-        if let id, CGDisplayIsBuiltin(id) == 0 { return true }
-        // Lid closed: the built-in display is off, so the keys can only mean the external one.
-        return !NSScreen.screens.contains { screen in
-            (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
-                .map { CGDisplayIsBuiltin($0) != 0 } ?? false
-        }
+        return NSScreen.screens.first { NSMouseInRect(pointer, $0.frame, false) }
+            ?? NSScreen.screens.first { !Self.isBuiltIn($0) }
+    }
+
+    private static func isBuiltIn(_ screen: NSScreen) -> Bool {
+        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
+            .map { CGDisplayIsBuiltin($0) != 0 } ?? false
     }
 }

@@ -7,17 +7,21 @@ struct LumacApp: App {
     @StateObject private var display: DisplayController
     @StateObject private var keys: BrightnessKeys
     @StateObject private var sync: BrightnessSync
+    @StateObject private var builtIn: BuiltInBrightness
 
     init() {
         let display = DisplayController()
+        let builtIn = BuiltInBrightness()
+        let sync = BrightnessSync(display: display)
         _display = StateObject(wrappedValue: display)
-        _keys = StateObject(wrappedValue: BrightnessKeys(display: display))
-        _sync = StateObject(wrappedValue: BrightnessSync(display: display))
+        _builtIn = StateObject(wrappedValue: builtIn)
+        _sync = StateObject(wrappedValue: sync)
+        _keys = StateObject(wrappedValue: BrightnessKeys(display: display, builtIn: builtIn, sync: sync))
     }
 
     var body: some Scene {
         MenuBarExtra {
-            PanelView(lid: lid, display: display, keys: keys, sync: sync)
+            PanelView(lid: lid, display: display, builtIn: builtIn, keys: keys, sync: sync)
         } label: {
             Image("MenuIcon")
                 .accessibilityLabel("Lumac")
@@ -30,6 +34,7 @@ struct LumacApp: App {
 struct PanelView: View {
     @ObservedObject var lid: LidMonitor
     @ObservedObject var display: DisplayController
+    @ObservedObject var builtIn: BuiltInBrightness
     @ObservedObject var keys: BrightnessKeys
     @ObservedObject var sync: BrightnessSync
     /// Bumped after each login item change so the toggle re-reads the real status.
@@ -37,13 +42,22 @@ struct PanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            DisplayHeader(name: lid.externalDisplayName, softwareDimming: display.softwareDimming)
+            DisplayHeader(
+                symbol: "display",
+                name: lid.externalDisplayName.map { Text(verbatim: $0) } ?? Text("No external display"),
+                dimmed: lid.externalDisplayName == nil,
+                subtitle: display.softwareDimming ? Text("Software dimming") : nil
+            )
+            .help(display.softwareDimming ? Text("This display doesn't accept brightness commands: the picture is darkened instead of the backlight.") : Text(verbatim: ""))
 
             if lid.externalDisplayName != nil {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(DisplayController.continuous, id: \.self) { code in
                         if let level = display.levels[code] {
-                            LevelRow(code: code, level: level) { display.set(code, to: $0) }
+                            LevelRow(code: code, level: level) { value in
+                                display.set(code, to: value)
+                                if code == .brightness { sync.externalAdjusted(to: value) }
+                            }
                         }
                     }
                     if let input = display.input {
@@ -58,13 +72,21 @@ struct PanelView: View {
                 .padding(.vertical, 12)
             }
 
+            if let level = builtIn.level {
+                DisplayHeader(symbol: "laptopcomputer", name: Text("Built-in display"), dimmed: false, subtitle: nil)
+                    .padding(.top, lid.externalDisplayName == nil ? 8 : 0)
+                LevelRow(code: .brightness, level: level) { builtIn.set($0) }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 12)
+            }
+
             Divider().padding(.vertical, 4)
 
             VStack(alignment: .leading, spacing: 8) {
                 if sync.available {
                     SwitchRow("Follow the built-in display's brightness", isOn: $sync.enabled)
                 }
-                SwitchRow("Brightness keys control the external display", isOn: $keys.enabled)
+                SwitchRow("Brightness keys adjust the display under the pointer", isOn: $keys.enabled)
                 if keys.enabled, !keys.trusted {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Allow Lumac in Privacy & Security > Accessibility.")
@@ -114,31 +136,27 @@ struct PanelView: View {
     }
 }
 
-/// Rounded card with the display's name, like the display modules of Control Center.
+/// Rounded card with a display's symbol and name, like the display modules of Control Center.
 private struct DisplayHeader: View {
-    let name: String?
-    let softwareDimming: Bool
+    let symbol: String
+    let name: Text
+    let dimmed: Bool
+    let subtitle: Text?
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "display")
+            Image(systemName: symbol)
                 .font(.system(size: 16))
-                .foregroundStyle(name == nil ? .secondary : .primary)
+                .foregroundStyle(dimmed ? .secondary : .primary)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 1) {
-                if let name {
-                    Text(verbatim: name)
-                        .font(.system(size: 14, weight: .semibold))
-                } else {
-                    Text("No external display")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-                if softwareDimming {
-                    Text("Software dimming")
+                name
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(dimmed ? .secondary : .primary)
+                if let subtitle {
+                    subtitle
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                        .help("This display doesn't accept brightness commands: the picture is darkened instead of the backlight.")
                 }
             }
             Spacer(minLength: 0)

@@ -31,12 +31,22 @@
         }
       }
     },
-    "Brightness keys control the external display": {
+    "Brightness keys adjust the display under the pointer": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les touches de luminosité règlent l'écran externe"
+            "value": "Les touches de luminosité règlent l'écran sous le pointeur"
+          }
+        }
+      }
+    },
+    "Built-in display": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écran intégré"
           }
         }
       }
@@ -57,6 +67,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Contraste"
+          }
+        }
+      }
+    },
+    "External display": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écran externe"
           }
         }
       }
