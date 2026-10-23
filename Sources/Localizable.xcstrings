@@ -1,23 +1,22 @@
 {
   "sourceLanguage": "en",
-  "version": "1.0",
   "strings": {
-    "No external display": {
+    "Brightness": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun écran externe"
+            "value": "Luminosité"
           }
         }
       }
     },
-    "Sleep when the lid closes": {
+    "Brightness control unavailable for this display": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mettre en veille à la fermeture du capot"
+            "value": "Réglage de la luminosité indisponible pour cet écran"
           }
         }
       }
@@ -28,6 +27,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dernière mise en veille : %@"
+          }
+        }
+      }
+    },
+    "No external display": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun écran externe"
           }
         }
       }
@@ -51,6 +60,17 @@
           }
         }
       }
+    },
+    "Sleep when the lid closes": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre en veille à la fermeture du capot"
+          }
+        }
+      }
     }
-  }
+  },
+  "version": "1.0"
 }
