@@ -22,9 +22,14 @@ on a timer, so this doesn't happen.
 - **Software dimming** when the display doesn't accept DDC commands (many USB-C hubs with an HDMI
   output): the slider darkens the picture through the gamma table instead, and says so.
 - **Brightness keys** of the keyboard change the external display when the pointer is on it, or when
-  the lid is closed. Needs the Accessibility permission.
-- **Follow the built-in display**: the external display copies the MacBook's brightness, which macOS
-  sets from the ambient light sensor.
+  the lid is closed; on the built-in display they work as usual. Needs the Accessibility permission.
+- **Follow the built-in display**: the external display follows the MacBook's brightness, which macOS
+  sets from the ambient light sensor. Adjust the external display by hand while following and Lumac
+  keeps that gap.
+- **Brightness calibration** (`Tools/brightness-calibration/calibrate.sh`): matches the two displays
+  level by level, by eye with the arrow keys (`--manual`) or with a camera that sees both screens, such
+  as an iPhone through Continuity Camera. Following then uses the measured curve.
+- **Built-in display brightness** slider in the panel, next to the external display's.
 - **Volume slider** for displays with speakers.
 - **Input switch** (DisplayPort, HDMI, USB-C), with a confirmation since the picture leaves the Mac.
 - Shows the name of the connected display and the time of the last sleep.
