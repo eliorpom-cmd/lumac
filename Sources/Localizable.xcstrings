@@ -81,6 +81,16 @@
         }
       }
     },
+    "Input source": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source d'entrée"
+          }
+        }
+      }
+    },
     "Last sleep: %@": {
       "localizations": {
         "fr": {
