@@ -8,8 +8,11 @@ import AVFoundation
 // frame: for each built-in level, the external level that gives the same pixel values in the
 // same frame is the one that looks equally bright from there.
 //
+// With --manual, no camera: the built-in display is set to each level and the user matches
+// the external display by eye with the arrow keys, then compares with the camera's curve.
+//
 // Result: pairs (built-in level, external level) saved as `syncCurve` in Lumac's defaults.
-// Build and run: Tools/brightness-calibration/calibrate.sh
+// Build and run: Tools/brightness-calibration/calibrate.sh [--manual]
 
 setvbuf(stdout, nil, _IONBF, 0)
 
@@ -89,22 +92,35 @@ func pump(_ seconds: TimeInterval) {
 
 // MARK: - Screens
 
-/// One borderless window per screen, filled with a flat gray.
+/// Borderless windows can't take key events unless they say so.
+final class KeyWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+}
+
+/// One borderless window per screen, filled with a flat gray, with an optional caption.
 @MainActor
 final class Patches {
     private var windows: [CGDirectDisplayID: NSWindow] = [:]
+    private var captions: [CGDirectDisplayID: NSTextField] = [:]
 
     init(screens: [NSScreen]) {
         for screen in screens {
             guard let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else { continue }
-            let window = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+            let window = KeyWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
             window.level = .screenSaver
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             window.isOpaque = true
             window.backgroundColor = .black
             window.setFrame(screen.frame, display: true)
+            let caption = NSTextField(labelWithString: "")
+            caption.font = .systemFont(ofSize: 22, weight: .medium)
+            caption.textColor = NSColor(white: 0.25, alpha: 1)
+            caption.alignment = .center
+            caption.frame = NSRect(x: 0, y: 60, width: screen.frame.width, height: 34)
+            window.contentView?.addSubview(caption)
             window.orderFrontRegardless()
             windows[id] = window
+            captions[id] = caption
         }
     }
 
@@ -113,21 +129,38 @@ final class Patches {
         windows[id]?.display()
     }
 
+    func caption(_ id: CGDirectDisplayID, _ text: String) {
+        captions[id]?.stringValue = text
+    }
+
+    /// Makes the window on `id` receive the keyboard.
+    func focus(_ id: CGDirectDisplayID) {
+        NSApp.activate(ignoringOtherApps: true)
+        windows[id]?.makeKeyAndOrderFront(nil)
+    }
+
     func close() { windows.values.forEach { $0.orderOut(nil) } }
 }
 
 // MARK: - Calibration
 
+let levels = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1.0]
+let minimum = 0.1
+/// A light gray keeps both screens below the camera's clipping point, and is easy to compare by eye.
+let gray = 0.7
+
 @MainActor
 func calibrate() -> Int32 {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
+    let manual = CommandLine.arguments.contains("--manual")
 
     guard let builtInID = BuiltInBrightness.displayID(), let builtInStart = BuiltInBrightness.read() else {
         print("Écran intégré introuvable (capot fermé ?)."); return 1
     }
     let builtInScreen = NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == builtInID }
-    guard let externalScreen = NSScreen.screens.first(where: { $0 != builtInScreen }),
+    guard let builtInScreen,
+          let externalScreen = NSScreen.screens.first(where: { $0 != builtInScreen }),
           let externalID = externalScreen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
     else { print("Écran externe introuvable."); return 1 }
 
@@ -145,18 +178,60 @@ func calibrate() -> Int32 {
     }
     print("Écran externe : \(externalScreen.localizedName), réglé par \(usesDDC ? "DDC" : "atténuation logicielle")")
 
-    guard let camera = Camera(preferring: CommandLine.arguments.dropFirst().first ?? "iPhone") else {
-        print("Caméra introuvable. Branche l'iPhone ou vérifie l'autorisation Caméra du Terminal."); return 1
+    let camera: Camera?
+    if manual {
+        camera = nil
+    } else {
+        guard let found = Camera(preferring: CommandLine.arguments.dropFirst().first { !$0.hasPrefix("--") } ?? "iPhone") else {
+            print("Caméra introuvable. Branche l'iPhone ou vérifie l'autorisation Caméra du Terminal."); return 1
+        }
+        camera = found
     }
-    defer { camera.stop() }
+    defer { camera?.stop() }
 
-    let patches = Patches(screens: [builtInScreen!, externalScreen])
+    let patches = Patches(screens: [builtInScreen, externalScreen])
     let builtIn = BuiltInBrightness()
     defer {
         patches.close()
         builtIn.set(builtInStart)
         if usesDDC, let ddc, let start = ddcStart { try? ddc.write(.brightness, value: start.current) } else { dimmer.restore() }
     }
+
+    let defaults = UserDefaults(suiteName: "dev.byelior.lumac")!
+    let previous = (defaults.array(forKey: "syncCurve") as? [[Double]]) ?? []
+
+    let measured: [[Double]]
+    if let camera {
+        guard let curve = cameraCurve(camera: camera, patches: patches, builtIn: builtIn, builtInID: builtInID, externalID: externalID, setExternal: setExternal) else { return 1 }
+        measured = curve
+    } else {
+        guard let curve = manualCurve(patches: patches, builtIn: builtIn, builtInID: builtInID, externalID: externalID, setExternal: setExternal) else {
+            print("Calibration annulée, rien n'a été enregistré."); return 1
+        }
+        measured = curve
+    }
+
+    if manual, !previous.isEmpty {
+        print("\n   Mac  |  À l'œil  |  Caméra")
+        for pair in measured {
+            let other = previous.first { abs($0[0] - pair[0]) < 0.001 }.map { String(format: "%5.0f %%", $0[1] * 100) } ?? "    –"
+            print(String(format: "  %3.0f %% |  %5.0f %%  | ", pair[0] * 100, pair[1] * 100) + other)
+        }
+        print("\nGarder la courbe à l'œil ? (o/n) ", terminator: "")
+        guard readLine()?.lowercased().hasPrefix("o") == true else {
+            print("Courbe de la caméra gardée."); return 0
+        }
+    }
+    defaults.set(measured, forKey: "syncCurve")
+    // The curve replaces the default offset; manual adjustments start again from zero.
+    defaults.set(0.0, forKey: "syncOffset")
+    print("Courbe enregistrée. Active « Suivre la luminosité de l'écran intégré » dans Lumac.")
+    return 0
+}
+
+/// Camera mode: finds both screens in the frame, then matches their pixel values level by level.
+@MainActor
+func cameraCurve(camera: Camera, patches: Patches, builtIn: BuiltInBrightness, builtInID: CGDirectDisplayID, externalID: CGDirectDisplayID, setExternal: (Double) -> Void) -> [[Double]]? {
     builtIn.set(1)
     setExternal(1)
 
@@ -176,11 +251,9 @@ func calibrate() -> Int32 {
     let externalCells = mask(externalLit), builtInCells = mask(builtInLit)
     print("Cellules trouvées : intégré \(builtInCells.count), externe \(externalCells.count)")
     guard builtInCells.count >= 6, externalCells.count >= 6, Set(builtInCells).isDisjoint(with: externalCells) else {
-        print("Les deux écrans doivent être bien visibles sur l'image de l'iPhone. Recadre et relance."); return 1
+        print("Les deux écrans doivent être bien visibles sur l'image de l'iPhone. Recadre et relance."); return nil
     }
 
-    // A light gray keeps both screens below the camera's clipping point.
-    let gray = 0.7
     patches.fill(builtInID, gray: gray); patches.fill(externalID, gray: gray)
     func ratio() -> Double {
         let grid = camera.grid(after: 0.9)
@@ -189,10 +262,10 @@ func calibrate() -> Int32 {
     }
 
     var curve: [[Double]] = []
-    for target in [0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1.0] {
+    for target in levels {
         builtIn.set(target)
         // Bisection on the external level: brightness grows with the level on both paths.
-        var low = 0.1, high = 1.0
+        var low = minimum, high = 1.0
         setExternal(high)
         if ratio() < 1 {
             low = high
@@ -207,13 +280,54 @@ func calibrate() -> Int32 {
         curve.append([target, match])
         print(String(format: "Intégré %3.0f %%  →  externe %3.0f %%%@", target * 100, match * 100, match >= 0.99 ? "  (externe au maximum)" : ""))
     }
+    return curve
+}
 
-    let defaults = UserDefaults(suiteName: "dev.byelior.lumac")!
-    defaults.set(curve, forKey: "syncCurve")
-    // The curve replaces the default offset; manual adjustments start again from zero.
-    defaults.set(0.0, forKey: "syncOffset")
-    print("Courbe enregistrée. Relance Lumac et active « Suivre la luminosité de l'écran intégré ».")
-    return 0
+/// Manual mode: the user matches the external display by eye. ↑ ↓ change it by 2 %,
+/// ⇧↑ ⇧↓ by 10 %, Space validates, Escape cancels.
+@MainActor
+func manualCurve(patches: Patches, builtIn: BuiltInBrightness, builtInID: CGDirectDisplayID, externalID: CGDirectDisplayID, setExternal: @escaping (Double) -> Void) -> [[Double]]? {
+    patches.fill(builtInID, gray: gray); patches.fill(externalID, gray: gray)
+    print("Règle le LG pour qu'il paraisse aussi clair que le Mac : ↑ ↓ (⇧ pour aller plus vite), Espace pour valider, Échap pour annuler.")
+
+    var level = 0.5
+    var validated = false
+    var cancelled = false
+    let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        let fast = event.modifierFlags.contains(.shift)
+        switch event.keyCode {
+        case 126: level = min(1, level + (fast ? 0.1 : 0.02))
+        case 125: level = max(minimum, level - (fast ? 0.1 : 0.02))
+        case 49: validated = true
+        case 53: cancelled = true
+        default: return event
+        }
+        return nil
+    }
+    defer { monitor.map(NSEvent.removeMonitor) }
+
+    var curve: [[Double]] = []
+    for (index, target) in levels.enumerated() {
+        builtIn.set(target)
+        // Starts from the same level as the Mac, so the camera's answer doesn't steer the eye.
+        level = max(minimum, target)
+        validated = false
+        patches.caption(builtInID, String(format: "Mac : %.0f %%   (%d/%d)", target * 100, index + 1, levels.count))
+        patches.focus(externalID)
+        var shown = -1.0
+        while !validated {
+            if cancelled { return nil }
+            if level != shown {
+                setExternal(level)
+                shown = level
+                patches.caption(externalID, String(format: "%.0f %%   ↑ ↓ pour régler, Espace pour valider", level * 100))
+            }
+            pump(0.05)
+        }
+        curve.append([target, level])
+        print(String(format: "Intégré %3.0f %%  →  externe %3.0f %%", target * 100, level * 100))
+    }
+    return curve
 }
 
 exit(MainActor.assumeIsolated { calibrate() })
