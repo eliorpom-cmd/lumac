@@ -4,7 +4,7 @@ import SwiftUI
 @main
 struct LumacApp: App {
     @StateObject private var lid = LidMonitor()
-    @StateObject private var brightness = BrightnessController()
+    @StateObject private var display = DisplayController()
     /// Bumped after each login item change so the toggle re-reads the real status.
     @State private var loginItemRevision = 0
 
@@ -20,16 +20,12 @@ struct LumacApp: App {
                         .foregroundStyle(.secondary)
                 }
 
-                if let level = brightness.brightness {
-                    HStack(spacing: 8) {
-                        Image(systemName: "sun.min")
-                        // Some displays turn the backlight off at 0, which looks like a dead screen.
-                        Slider(value: Binding(get: { level }, set: { brightness.set($0) }), in: 0.1...1)
-                            .accessibilityLabel("Brightness")
-                        Image(systemName: "sun.max")
+                ForEach(DisplayController.continuous, id: \.self) { code in
+                    if let level = display.levels[code] {
+                        LevelRow(code: code, level: level) { display.set(code, to: $0) }
                     }
-                    .foregroundStyle(.secondary)
-                } else if lid.externalDisplayName != nil {
+                }
+                if display.levels.isEmpty, lid.externalDisplayName != nil {
                     Text("Brightness control unavailable for this display")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -53,7 +49,7 @@ struct LumacApp: App {
             .toggleStyle(.checkbox)
             .padding(14)
             .frame(width: 280)
-            .onAppear { brightness.refresh() }
+            .onAppear { display.refresh() }
         } label: {
             Image("MenuIcon")
                 .accessibilityLabel("Lumac")
@@ -75,5 +71,43 @@ struct LumacApp: App {
                 loginItemRevision += 1
             }
         )
+    }
+}
+
+/// One slider per DDC control, with its symbol in place of a text label.
+private struct LevelRow: View {
+    let code: VCP
+    let level: Double
+    let change: (Double) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .frame(width: 18)
+            Slider(value: Binding(get: { level }, set: change), in: range)
+                .accessibilityLabel(title)
+        }
+        .foregroundStyle(.secondary)
+    }
+
+    /// Some displays turn the backlight off at 0, which looks like a dead screen.
+    private var range: ClosedRange<Double> { code == .brightness ? 0.1...1 : 0...1 }
+
+    private var symbol: String {
+        switch code {
+        case .brightness: return "sun.max"
+        case .contrast: return "circle.lefthalf.filled"
+        case .volume: return "speaker.wave.2"
+        case .input: return "rectangle.connected.to.line.below"
+        }
+    }
+
+    private var title: LocalizedStringKey {
+        switch code {
+        case .brightness: return "Brightness"
+        case .contrast: return "Contrast"
+        case .volume: return "Volume"
+        case .input: return "Input"
+        }
     }
 }

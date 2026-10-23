@@ -21,6 +21,26 @@
         }
       }
     },
+    "Contrast": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contraste"
+          }
+        }
+      }
+    },
+    "Input": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrée"
+          }
+        }
+      }
+    },
     "Last sleep: %@": {
       "localizations": {
         "fr": {
@@ -67,6 +87,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mettre en veille à la fermeture du capot"
+          }
+        }
+      }
+    },
+    "Volume": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume"
           }
         }
       }
