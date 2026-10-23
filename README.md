@@ -80,7 +80,9 @@ The DDC code is in [`Sources/DDC.swift`](Sources/DDC.swift). To test another Mac
 ./build/ddc-probe scan    # Get VCP brightness with each addressing, raw reply bytes
 ```
 
-USB-C hubs with an HDMI output have their own converter and may still block DDC.
+USB-C hubs with an HDMI output have their own converter, which may block DDC whatever the address.
+With the hub tested so far, every I2C call fails (`0xE0114000`) with both `0x37` and `0xB7`: connect the
+display to the Mac's HDMI port or over USB-C to DisplayPort instead.
 
 ## License
 
