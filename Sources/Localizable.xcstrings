@@ -21,6 +21,16 @@
         }
       }
     },
+    "Cancel": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuler"
+          }
+        }
+      }
+    },
     "Contrast": {
       "localizations": {
         "fr": {
@@ -87,6 +97,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mettre en veille à la fermeture du capot"
+          }
+        }
+      }
+    },
+    "Switch": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changer"
+          }
+        }
+      }
+    },
+    "Switch to %@? This Mac's picture will disappear from the display.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passer sur %@ ? L'image de ce Mac disparaîtra de l'écran."
           }
         }
       }

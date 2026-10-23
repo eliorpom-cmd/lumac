@@ -25,6 +25,9 @@ struct LumacApp: App {
                         LevelRow(code: code, level: level) { display.set(code, to: $0) }
                     }
                 }
+                if let input = display.input {
+                    InputRow(current: input) { display.selectInput($0) }
+                }
                 if display.levels.isEmpty, lid.externalDisplayName != nil {
                     Text("Brightness control unavailable for this display")
                         .font(.caption)
@@ -109,5 +112,58 @@ private struct LevelRow: View {
         case .volume: return "Volume"
         case .input: return "Input"
         }
+    }
+}
+
+/// Input source picker. Switching moves the picture away from this Mac, so it asks first.
+private struct InputRow: View {
+    let current: UInt8
+    let select: (UInt8) -> Void
+    @State private var requested: (value: UInt8, name: String)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "rectangle.connected.to.line.below")
+                    .frame(width: 18)
+                    .foregroundStyle(.secondary)
+                Menu {
+                    ForEach(DisplayController.inputs, id: \.value) { source in
+                        Button {
+                            if source.value != current { requested = source }
+                        } label: {
+                            if source.value == current {
+                                Label(source.name, systemImage: "checkmark")
+                            } else {
+                                Text(verbatim: source.name)
+                            }
+                        }
+                    }
+                } label: {
+                    Text(verbatim: currentName)
+                }
+                .accessibilityLabel("Input")
+            }
+
+            if let requested {
+                Text("Switch to \(requested.name)? This Mac's picture will disappear from the display.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Button("Cancel") { self.requested = nil }
+                    Button("Switch") {
+                        select(requested.value)
+                        self.requested = nil
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private var currentName: String {
+        DisplayController.inputs.first { $0.value == current }?.name ?? String(format: "Input 0x%02X", current)
     }
 }

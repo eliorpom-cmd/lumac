@@ -20,6 +20,7 @@ on a timer, so this doesn't happen.
 - **Brightness and contrast sliders** that change the display's own settings over DDC/CI, not a gamma
   overlay. Works over USB-C and DisplayPort, and through the built-in HDMI port of M1 MacBook Pros.
 - **Volume slider** for displays with speakers.
+- **Input switch** (DisplayPort, HDMI, USB-C), with a confirmation since the picture leaves the Mac.
 - Shows the name of the connected display and the time of the last sleep.
 - Open at login, from the menu.
 - English and French.
