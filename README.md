@@ -2,14 +2,10 @@
 
 # Lumac
 
-A menu bar app for MacBooks connected to an external display: close the lid and the Mac goes to sleep,
-instead of switching to clamshell mode.
+A menu bar app that puts a MacBook to sleep when its lid is closed with an external display connected.
+Without it, macOS switches to clamshell mode and keeps running on the external display.
 
-## Why
-
-When a MacBook is connected to an external display, closing the lid doesn't put it to sleep. macOS
-switches to clamshell mode and keeps running on the external display. If you'd rather close the lid
-when you're done, you need a tool for that.
+## Why not noclamshell
 
 [noclamshell](https://github.com/pirj/noclamshell) does it by checking the lid every 5 seconds. Right
 after a wake, it often reads the lid as still closed and puts the Mac back to sleep: you open the lid,
