@@ -17,6 +17,8 @@ on a timer, so this doesn't happen.
 - **Sleep when the lid closes**, only when an external display is connected. Without one, macOS
   already sleeps on its own.
 - **Back to sleep after a wake with the lid closed**, for example when you touch an external keyboard.
+- **Brightness slider** that changes the display's backlight over DDC/CI, not a gamma overlay. Works
+  over USB-C and DisplayPort, and through the built-in HDMI port of M1 MacBook Pros.
 - Shows the name of the connected display and the time of the last sleep.
 - Open at login, from the menu.
 - English and French.
@@ -60,15 +62,27 @@ All the logic is in [`Sources/LidMonitor.swift`](Sources/LidMonitor.swift). Logs
 log stream --predicate 'subsystem == "dev.byelior.lumac"'
 ```
 
-## Help wanted: real brightness over HDMI
+## Brightness over HDMI
 
-The next feature is a brightness slider that changes the display's backlight through DDC/CI, not a
-gamma overlay. It works over USB-C and DisplayPort with tools like [m1ddc](https://github.com/waydabber/m1ddc),
-but not through the built-in HDMI port of M1 MacBook Pros, nor through most USB-C hubs with an HDMI
-output. BetterDisplay manages it on these Macs, but its code is closed.
+On the built-in HDMI port of M1 MacBook Pros, the signal goes through a DisplayPort-to-HDMI converter
+(`AppleDCPMCDP29XX` in IOKit). With the standard DDC/CI chip address `0x37`, the display only returns the
+DDC/CI null message (`6E 80 BE`) and ignores writes: this is why tools that use `0x37` read `110` (`0x6E`)
+for every value. With chip address `0xB7`, the same frames go through and the display answers normally.
+Lumac tries the standard addressing first, then `0xB7`, and keeps the first that gets a valid reply.
+It never tries the host address `0x50` on its own: through the HDMI converter, a read request sent
+with it set the brightness to 0.
 
-If you know how to send a DDC command to an HDMI display from these ports, see
-[CONTRIBUTING.md](CONTRIBUTING.md) for what has been tried so far.
+The DDC code is in [`Sources/DDC.swift`](Sources/DDC.swift). To test another Mac, hub or display:
+
+```bash
+./Tools/ddc-probe/build.sh
+./build/ddc-probe list    # displays found, and whether they go through the HDMI converter
+./build/ddc-probe scan    # Get VCP brightness with each addressing, raw reply bytes
+```
+
+USB-C hubs with an HDMI output have their own converter, which may block DDC whatever the address.
+With the hub tested so far, every I2C call fails (`0xE0114000`) with both `0x37` and `0xB7`: connect the
+display to the Mac's HDMI port or over USB-C to DisplayPort instead.
 
 ## License
 
