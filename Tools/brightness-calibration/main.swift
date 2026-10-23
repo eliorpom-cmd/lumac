@@ -48,6 +48,7 @@ final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     func stop() { session.stopRunning() }
 
     /// Mean luma per cell of a 64×36 grid, from a frame taken after `delay`.
+    @MainActor
     func grid(after delay: TimeInterval) -> [Double] {
         pump(delay)
         lock.lock(); let start = frameCount; lock.unlock()
@@ -85,9 +86,16 @@ final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     }
 }
 
-/// Runs the main run loop, so windows draw and camera callbacks arrive.
+/// Runs the app's event loop for `seconds`: windows draw, keys reach the windows and camera
+/// callbacks arrive. A bare run loop would never deliver key events.
+@MainActor
 func pump(_ seconds: TimeInterval) {
-    RunLoop.main.run(until: Date().addingTimeInterval(seconds))
+    let until = Date().addingTimeInterval(seconds)
+    repeat {
+        if let event = NSApp.nextEvent(matching: .any, until: until, inMode: .default, dequeue: true) {
+            NSApp.sendEvent(event)
+        }
+    } while Date() < until
 }
 
 // MARK: - Screens
@@ -153,6 +161,7 @@ let gray = 0.7
 func calibrate() -> Int32 {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
+    app.finishLaunching()
     let manual = CommandLine.arguments.contains("--manual")
 
     guard let builtInID = BuiltInBrightness.displayID(), let builtInStart = BuiltInBrightness.read() else {
@@ -284,7 +293,7 @@ func cameraCurve(camera: Camera, patches: Patches, builtIn: BuiltInBrightness, b
 }
 
 /// Manual mode: the user matches the external display by eye. ↑ ↓ change it by 2 %,
-/// ⇧↑ ⇧↓ by 10 %, Space validates, Escape cancels.
+/// ⇧↑ ⇧↓ by 10 %, Space validates, Escape cancels; two minutes without a key cancel too.
 @MainActor
 func manualCurve(patches: Patches, builtIn: BuiltInBrightness, builtInID: CGDirectDisplayID, externalID: CGDirectDisplayID, setExternal: @escaping (Double) -> Void) -> [[Double]]? {
     patches.fill(builtInID, gray: gray); patches.fill(externalID, gray: gray)
@@ -315,8 +324,16 @@ func manualCurve(patches: Patches, builtIn: BuiltInBrightness, builtInID: CGDire
         patches.caption(builtInID, String(format: "Mac : %.0f %%   (%d/%d)", target * 100, index + 1, levels.count))
         patches.focus(externalID)
         var shown = -1.0
+        var lastKey = Date()
+        var lastLevel = level
         while !validated {
             if cancelled { return nil }
+            // The gray windows cover every screen: give up if nobody is at the keyboard.
+            if level != lastLevel { lastLevel = level; lastKey = Date() }
+            if Date().timeIntervalSince(lastKey) > 120 {
+                print("Aucune touche depuis 2 min : calibration arrêtée.")
+                return nil
+            }
             if level != shown {
                 setExternal(level)
                 shown = level
