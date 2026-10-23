@@ -3,7 +3,8 @@ import ApplicationServices
 import CoreGraphics
 
 /// Lets the keyboard's brightness keys drive the external display when the pointer is on it,
-/// with the macOS indicator. On the built-in display, the keys keep their usual effect.
+/// On the built-in display, the keys keep their usual effect. The macOS indicator can't be shown
+/// on another display (the private OSD framework shows nothing on macOS 27), so there is none.
 ///
 /// Intercepting the keys takes an event tap, which needs the Accessibility permission.
 @MainActor
@@ -122,9 +123,6 @@ final class BrightnessKeys: ObservableObject {
         guard keyDown else { return display.brightness != nil }
         guard display.step(.brightness, by: delta), let level = display.brightness else { return false }
         sync.externalAdjusted(to: level)
-        if let id = screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID {
-            SystemOSD.showBrightness(level, on: id)
-        }
         return true
     }
 
