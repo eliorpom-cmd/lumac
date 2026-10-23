@@ -200,11 +200,17 @@ func calibrate() -> Int32 {
 
     let patches = Patches(screens: [builtInScreen, externalScreen])
     let builtIn = BuiltInBrightness()
-    defer {
+    var finished = false
+    /// Gives the screens back: the windows go away and both displays return to their levels.
+    func finish() {
+        guard !finished else { return }
+        finished = true
         patches.close()
         builtIn.set(builtInStart)
         if usesDDC, let ddc, let start = ddcStart { try? ddc.write(.brightness, value: start.current) } else { dimmer.restore() }
+        pump(0.2)
     }
+    defer { finish() }
 
     let defaults = UserDefaults(suiteName: "dev.byelior.lumac")!
     let previous = (defaults.array(forKey: "syncCurve") as? [[Double]]) ?? []
@@ -219,6 +225,9 @@ func calibrate() -> Int32 {
         }
         measured = curve
     }
+
+    // The question below is asked in Terminal, which the gray windows would hide.
+    finish()
 
     if manual, !previous.isEmpty {
         print("\n   Mac  |  À l'œil  |  Caméra")
