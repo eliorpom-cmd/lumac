@@ -1,0 +1,56 @@
+{
+  "sourceLanguage": "en",
+  "version": "1.0",
+  "strings": {
+    "No external display": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun écran externe"
+          }
+        }
+      }
+    },
+    "Sleep when the lid closes": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre en veille à la fermeture du capot"
+          }
+        }
+      }
+    },
+    "Last sleep: %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dernière mise en veille : %@"
+          }
+        }
+      }
+    },
+    "Open at login": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir à la connexion"
+          }
+        }
+      }
+    },
+    "Quit Lumac": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitter Lumac"
+          }
+        }
+      }
+    }
+  }
+}
