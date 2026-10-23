@@ -8,7 +8,8 @@ final class DisplayController: ObservableObject {
     @Published private(set) var levels: [VCP: Double] = [:]
 
     /// Continuous controls read on each refresh, in panel order.
-    nonisolated static let continuous: [VCP] = [.brightness, .contrast]
+    /// A display without speakers fails the volume read, so its row stays hidden.
+    nonisolated static let continuous: [VCP] = [.brightness, .contrast, .volume]
 
     private let log = Logger(subsystem: "dev.byelior.lumac", category: "ddc")
     /// DDC calls block for tens of milliseconds: they run off the main thread, one at a time.

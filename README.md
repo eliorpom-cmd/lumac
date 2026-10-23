@@ -19,6 +19,7 @@ on a timer, so this doesn't happen.
 - **Back to sleep after a wake with the lid closed**, for example when you touch an external keyboard.
 - **Brightness and contrast sliders** that change the display's own settings over DDC/CI, not a gamma
   overlay. Works over USB-C and DisplayPort, and through the built-in HDMI port of M1 MacBook Pros.
+- **Volume slider** for displays with speakers.
 - Shows the name of the connected display and the time of the last sleep.
 - Open at login, from the menu.
 - English and French.
