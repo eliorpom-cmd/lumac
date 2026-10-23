@@ -71,16 +71,6 @@
         }
       }
     },
-    "External display": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Écran externe"
-          }
-        }
-      }
-    },
     "Follow the built-in display's brightness": {
       "localizations": {
         "fr": {

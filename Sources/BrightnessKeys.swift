@@ -2,8 +2,8 @@ import AppKit
 import ApplicationServices
 import CoreGraphics
 
-/// Lets the keyboard's brightness keys drive the display under the pointer, built-in or external,
-/// with an indicator that names the display being adjusted.
+/// Lets the keyboard's brightness keys drive the external display when the pointer is on it,
+/// with the macOS indicator. On the built-in display, the keys keep their usual effect.
 ///
 /// Intercepting the keys takes an event tap, which needs the Accessibility permission.
 @MainActor
@@ -17,7 +17,6 @@ final class BrightnessKeys: ObservableObject {
     @Published private(set) var trusted = AXIsProcessTrusted()
 
     private let display: DisplayController
-    private let builtIn: BuiltInBrightness
     private let sync: BrightnessSync
     private var tap: CFMachPort?
     private var trustTimer: Timer?
@@ -32,9 +31,8 @@ final class BrightnessKeys: ObservableObject {
     private static let brightnessUp = 2
     private static let brightnessDown = 3
 
-    init(display: DisplayController, builtIn: BuiltInBrightness, sync: BrightnessSync) {
+    init(display: DisplayController, sync: BrightnessSync) {
         self.display = display
-        self.builtIn = builtIn
         self.sync = sync
         enabled = UserDefaults.standard.bool(forKey: "brightnessKeys")
         update(prompt: false)
@@ -118,18 +116,15 @@ final class BrightnessKeys: ObservableObject {
         let keyDown = (nsEvent.data1 & 0xFF00) >> 8 == 0xA
         let delta = key == Self.brightnessUp ? Self.step : -Self.step
 
-        if builtInTarget {
-            // When DisplayServices can't set it, macOS handles the key as usual.
-            guard keyDown else { return BuiltInBrightness.read() != nil }
-            guard builtIn.step(by: delta), let level = builtIn.level else { return false }
-            LevelHUD.shared.show(name: String(localized: "Built-in display"), builtIn: true, level: level, on: screen)
-            return true
-        }
+        // The built-in display keeps the behaviour and indicator of macOS.
+        if builtInTarget { return false }
 
         guard keyDown else { return display.brightness != nil }
         guard display.step(.brightness, by: delta), let level = display.brightness else { return false }
         sync.externalAdjusted(to: level)
-        LevelHUD.shared.show(name: screen?.localizedName ?? String(localized: "External display"), builtIn: false, level: level, on: screen)
+        if let id = screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID {
+            SystemOSD.showBrightness(level, on: id)
+        }
         return true
     }
 

@@ -16,7 +16,7 @@ struct LumacApp: App {
         _display = StateObject(wrappedValue: display)
         _builtIn = StateObject(wrappedValue: builtIn)
         _sync = StateObject(wrappedValue: sync)
-        _keys = StateObject(wrappedValue: BrightnessKeys(display: display, builtIn: builtIn, sync: sync))
+        _keys = StateObject(wrappedValue: BrightnessKeys(display: display, sync: sync))
     }
 
     var body: some Scene {
