@@ -8,6 +8,8 @@ final class DisplayController: ObservableObject {
     @Published private(set) var levels: [VCP: Double] = [:]
     /// Current input source (VCP 0x60 value), nil when the display doesn't report it.
     @Published private(set) var input: UInt8?
+    /// True when brightness is simulated with the gamma table because the display doesn't answer over DDC.
+    @Published private(set) var softwareDimming = false
 
     /// Continuous controls read on each refresh, in panel order.
     /// A display without speakers fails the volume read, so its row stays hidden.
@@ -26,6 +28,15 @@ final class DisplayController: ObservableObject {
     /// Sliders move faster than the display accepts frames: only the latest value per control is sent.
     private var pending: [VCP: UInt16] = [:]
     private var sending = false
+    private let dimmer = SoftwareDimmer()
+    /// Debug switch to test software dimming on a display that answers over DDC:
+    /// `defaults write dev.byelior.lumac forceSoftwareDimming -bool YES`, or the launch argument
+    /// `-forceSoftwareDimming YES`.
+    private var forceSoftwareDimming: Bool { UserDefaults.standard.bool(forKey: "forceSoftwareDimming") }
+    private var softwareLevel: Double {
+        get { UserDefaults.standard.object(forKey: "softwareBrightness") as? Double ?? 1 }
+        set { UserDefaults.standard.set(newValue, forKey: "softwareBrightness") }
+    }
 
     var brightness: Double? { levels[.brightness] }
 
@@ -40,12 +51,18 @@ final class DisplayController: ObservableObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
         }
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.dimmer.restore() }
+        }
     }
 
     /// Finds the display again and reads its settings, after a wake or a display change.
     func refresh() {
+        let forceSoftware = forceSoftwareDimming
         queue.async { [weak self] in
-            let display = DDCDisplay.externalDisplays().first
+            let display = forceSoftware ? nil : DDCDisplay.externalDisplays().first
             var readings: [VCP: VCPReading] = [:]
             var input: UInt8?
             if let display, display.detectAddressing() {
@@ -69,6 +86,7 @@ final class DisplayController: ObservableObject {
                 if let display, !readings.isEmpty {
                     self.log.info("DDC ready (\(display.addressing.description, privacy: .public))")
                 }
+                self.updateSoftwareDimming(ddcBrightness: readings[.brightness] != nil)
             }
         }
     }
@@ -86,10 +104,42 @@ final class DisplayController: ObservableObject {
     }
 
     func set(_ code: VCP, to level: Double) {
+        if code == .brightness, softwareDimming, let id = dimmer.displayID {
+            levels[code] = level
+            softwareLevel = level
+            dimmer.apply(level, to: id)
+            return
+        }
         guard let maximum = maximums[code] else { return }
         levels[code] = level
         pending[code] = UInt16((level * Double(maximum)).rounded())
         sendPending()
+    }
+
+    /// Falls back to the gamma table when an external display is connected but its brightness
+    /// can't be set over DDC, and gives the picture back its profile once DDC works again.
+    private func updateSoftwareDimming(ddcBrightness: Bool) {
+        guard !ddcBrightness, let id = externalDisplayID() else {
+            if softwareDimming { log.info("Software dimming off") }
+            softwareDimming = false
+            dimmer.restore()
+            return
+        }
+        let level = min(1, max(Self.range(of: .brightness).lowerBound, softwareLevel))
+        if !softwareDimming { log.info("Software dimming on") }
+        softwareDimming = true
+        levels[.brightness] = level
+        // macOS resets gamma tables after display changes and wakes: capture and dim again.
+        dimmer.invalidate()
+        dimmer.apply(level, to: id)
+    }
+
+    private func externalDisplayID() -> CGDirectDisplayID? {
+        var count: UInt32 = 0
+        CGGetActiveDisplayList(0, nil, &count)
+        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        CGGetActiveDisplayList(count, &ids, &count)
+        return ids.prefix(Int(count)).first { CGDisplayIsBuiltin($0) == 0 }
     }
 
     /// Switches the display to another input: the picture leaves this Mac until it switches back.

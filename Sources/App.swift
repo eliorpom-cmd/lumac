@@ -34,6 +34,12 @@ struct LumacApp: App {
                         LevelRow(code: code, level: level) { display.set(code, to: $0) }
                     }
                 }
+                if display.softwareDimming {
+                    Text("Software dimming")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help("This display doesn't accept brightness commands: the picture is darkened instead of the backlight.")
+                }
                 if let input = display.input {
                     InputRow(current: input) { display.selectInput($0) }
                 }

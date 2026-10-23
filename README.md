@@ -19,6 +19,8 @@ on a timer, so this doesn't happen.
 - **Back to sleep after a wake with the lid closed**, for example when you touch an external keyboard.
 - **Brightness and contrast sliders** that change the display's own settings over DDC/CI, not a gamma
   overlay. Works over USB-C and DisplayPort, and through the built-in HDMI port of M1 MacBook Pros.
+- **Software dimming** when the display doesn't accept DDC commands (many USB-C hubs with an HDMI
+  output): the slider darkens the picture through the gamma table instead, and says so.
 - **Brightness keys** of the keyboard change the external display when the pointer is on it, or when
   the lid is closed. Needs the Accessibility permission.
 - **Follow the built-in display**: the external display copies the MacBook's brightness, which macOS

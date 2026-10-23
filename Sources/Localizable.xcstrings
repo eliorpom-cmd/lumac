@@ -141,6 +141,16 @@
         }
       }
     },
+    "Software dimming": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atténuation logicielle"
+          }
+        }
+      }
+    },
     "Switch": {
       "localizations": {
         "fr": {
@@ -157,6 +167,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Passer sur %@ ? L'image de ce Mac disparaîtra de l'écran."
+          }
+        }
+      }
+    },
+    "This display doesn't accept brightness commands: the picture is darkened instead of the backlight.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cet écran n'accepte pas les commandes de luminosité : l'image est assombrie au lieu du rétroéclairage."
           }
         }
       }
