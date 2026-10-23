@@ -21,6 +21,8 @@ on a timer, so this doesn't happen.
   overlay. Works over USB-C and DisplayPort, and through the built-in HDMI port of M1 MacBook Pros.
 - **Brightness keys** of the keyboard change the external display when the pointer is on it, or when
   the lid is closed. Needs the Accessibility permission.
+- **Follow the built-in display**: the external display copies the MacBook's brightness, which macOS
+  sets from the ambient light sensor.
 - **Volume slider** for displays with speakers.
 - **Input switch** (DisplayPort, HDMI, USB-C), with a confirmation since the picture leaves the Mac.
 - Shows the name of the connected display and the time of the last sleep.

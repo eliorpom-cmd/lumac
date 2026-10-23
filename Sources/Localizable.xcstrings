@@ -61,6 +61,16 @@
         }
       }
     },
+    "Follow the built-in display's brightness": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suivre la luminosité de l'écran intégré"
+          }
+        }
+      }
+    },
     "Input": {
       "localizations": {
         "fr": {

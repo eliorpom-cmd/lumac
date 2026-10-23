@@ -6,6 +6,7 @@ struct LumacApp: App {
     @StateObject private var lid = LidMonitor()
     @StateObject private var display: DisplayController
     @StateObject private var keys: BrightnessKeys
+    @StateObject private var sync: BrightnessSync
     /// Bumped after each login item change so the toggle re-reads the real status.
     @State private var loginItemRevision = 0
 
@@ -13,6 +14,7 @@ struct LumacApp: App {
         let display = DisplayController()
         _display = StateObject(wrappedValue: display)
         _keys = StateObject(wrappedValue: BrightnessKeys(display: display))
+        _sync = StateObject(wrappedValue: BrightnessSync(display: display))
     }
 
     var body: some Scene {
@@ -43,6 +45,9 @@ struct LumacApp: App {
 
                 Divider()
 
+                if sync.available {
+                    Toggle("Follow the built-in display's brightness", isOn: $sync.enabled)
+                }
                 Toggle("Brightness keys control the external display", isOn: $keys.enabled)
                 if keys.enabled, !keys.trusted {
                     Text("Allow Lumac in Privacy & Security > Accessibility.")
