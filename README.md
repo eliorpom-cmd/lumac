@@ -43,7 +43,16 @@ on a timer, so this doesn't happen.
 
 ## Installation
 
-There's no signed download yet: build Lumac from source.
+With [Homebrew](https://brew.sh):
+
+```bash
+brew install --cask eliorpom-cmd/tap/lumac
+```
+
+Or download `Lumac-<version>.zip` from the [latest release](https://github.com/eliorpom-cmd/lumac/releases/latest).
+Releases are signed with a Developer ID and notarized by Apple (macOS 14 or later).
+
+### Building from source
 
 ```bash
 brew install xcodegen
