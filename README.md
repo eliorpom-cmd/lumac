@@ -49,7 +49,7 @@ With [Homebrew](https://brew.sh):
 brew install --cask eliorpom-cmd/tap/lumac
 ```
 
-Or download `Lumac-<version>.zip` from the [latest release](https://github.com/eliorpom-cmd/lumac/releases/latest).
+Or download `Lumac-<version>.dmg` from the [latest release](https://github.com/eliorpom-cmd/lumac/releases/latest), open it and drag Lumac to Applications. Website: [lumac.byelior.dev](https://lumac.byelior.dev).
 Releases are signed with a Developer ID and notarized by Apple (macOS 14 or later).
 
 ### Building from source
