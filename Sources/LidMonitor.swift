@@ -33,7 +33,7 @@ final class LidMonitor: ObservableObject {
     private static let clamshellSleepBit = 1 << 1
 
     init() {
-        enabled = UserDefaults.standard.object(forKey: "sleepOnLidClose") as? Bool ?? true
+        enabled = UserDefaults.standard.object(forKey: "sleepOnLidClose") as? Bool ?? false
         rootDomain = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
         subscribeToClamshell()
         refreshDisplay()

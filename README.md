@@ -15,7 +15,7 @@ on a timer, so this doesn't happen.
 ## Features
 
 - **Sleep when the lid closes**, only when an external display is connected. Without one, macOS
-  already sleeps on its own.
+  already sleeps on its own. Off by default: turn it on in the panel.
 - **Back to sleep after a wake with the lid closed**, for example when you touch an external keyboard.
 - **Brightness and contrast sliders** that change the display's own settings over DDC/CI, not a gamma
   overlay. Works over USB-C and DisplayPort, and through the built-in HDMI port of M1 MacBook Pros.
