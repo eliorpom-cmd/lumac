@@ -1,6 +1,11 @@
 <img src="docs/icon.png" width="96" height="96" alt="Lumac icon">
 
-# Lumac
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
+    <img src="docs/logo-light.svg" height="36" alt="Lumac">
+  </picture>
+</h1>
 
 A menu bar app that puts a MacBook to sleep when its lid is closed with an external display connected.
 Without it, macOS switches to clamshell mode and keeps running on the external display.
