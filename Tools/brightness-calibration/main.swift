@@ -48,16 +48,21 @@ final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     func stop() { session.stopRunning() }
 
     /// Mean luma per cell of a 64×36 grid, from a frame taken after `delay`.
+    /// Nil when no new frame arrives within 10 s: the camera permission prompt hidden under the
+    /// gray windows, the iPhone disconnected or Continuity Camera stalled. Waiting forever there
+    /// left both screens gray with no way out but a blind force quit.
     @MainActor
-    func grid(after delay: TimeInterval) -> [Double] {
+    func grid(after delay: TimeInterval) -> [Double]? {
         pump(delay)
         lock.lock(); let start = frameCount; lock.unlock()
+        let deadline = Date().addingTimeInterval(10)
         // Waits for a frame captured after the screens changed.
-        while true {
+        while Date() < deadline {
             pump(0.05)
             lock.lock(); defer { lock.unlock() }
             if frameCount > start + 1, let latest { return latest }
         }
+        return nil
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -175,8 +180,11 @@ func calibrate() -> Int32 {
 
     // External control: DDC when the display answers, the gamma table otherwise, as Lumac does.
     let ddc = DDCDisplay.externalDisplays().first
-    let usesDDC = ddc?.detectAddressing() == true
-    let ddcStart = usesDDC ? try? ddc?.read(.brightness) : nil
+    // DDC only when the brightness reads back, as in Lumac: a display that answers the
+    // addressing probe but not the read is dimmed through the gamma table there, so the curve
+    // must be measured on that path too (and the log must say so).
+    let ddcStart = ddc?.detectAddressing() == true ? try? ddc?.read(.brightness) : nil
+    let usesDDC = ddcStart != nil
     let dimmer = SoftwareDimmer()
     func setExternal(_ level: Double) {
         if usesDDC, let ddc, let maximum = ddcStart?.maximum {
@@ -214,6 +222,12 @@ func calibrate() -> Int32 {
 
     let defaults = UserDefaults(suiteName: "dev.byelior.lumac")!
     let previous = (defaults.array(forKey: "syncCurve") as? [[Double]]) ?? []
+    // Where the saved curve came from. Curves saved before this key existed have no source.
+    let previousSource: String = switch defaults.string(forKey: "syncCurveSource") {
+    case "camera": "Caméra"
+    case "manual": "À l'œil (avant)"
+    default: "Précédente"
+    }
 
     let measured: [[Double]]
     if let camera {
@@ -230,17 +244,18 @@ func calibrate() -> Int32 {
     finish()
 
     if manual, !previous.isEmpty {
-        print("\n   Mac  |  À l'œil  |  Caméra")
+        print("\n   Mac  |  À l'œil  |  " + previousSource)
         for pair in measured {
             let other = previous.first { abs($0[0] - pair[0]) < 0.001 }.map { String(format: "%5.0f %%", $0[1] * 100) } ?? "    –"
             print(String(format: "  %3.0f %% |  %5.0f %%  | ", pair[0] * 100, pair[1] * 100) + other)
         }
         print("\nGarder la courbe à l'œil ? (o/n) ", terminator: "")
         guard readLine()?.lowercased().hasPrefix("o") == true else {
-            print("Courbe de la caméra gardée."); return 0
+            print("Courbe précédente gardée (\(previousSource.lowercased()))."); return 0
         }
     }
     defaults.set(measured, forKey: "syncCurve")
+    defaults.set(manual ? "manual" : "camera", forKey: "syncCurveSource")
     // The curve replaces the default offset; manual adjustments start again from zero.
     defaults.set(0.0, forKey: "syncOffset")
     print("Courbe enregistrée. Active « Suivre la luminosité de l'écran intégré » dans Lumac.")
@@ -256,11 +271,12 @@ func cameraCurve(camera: Camera, patches: Patches, builtIn: BuiltInBrightness, b
     // Finds each screen in the frame: light one at a time and keep the cells that brighten.
     print("Repérage des écrans…")
     patches.fill(builtInID, gray: 0); patches.fill(externalID, gray: 0)
-    let dark = camera.grid(after: 2)
+    let noFrames = "La caméra n'envoie plus d'images (autorisation Caméra du Terminal, iPhone débranché ?). Calibration arrêtée."
+    guard let dark = camera.grid(after: 2) else { print(noFrames); return nil }
     patches.fill(externalID, gray: 1)
-    let externalLit = camera.grid(after: 1.5)
+    guard let externalLit = camera.grid(after: 1.5) else { print(noFrames); return nil }
     patches.fill(externalID, gray: 0); patches.fill(builtInID, gray: 1)
-    let builtInLit = camera.grid(after: 1.5)
+    guard let builtInLit = camera.grid(after: 1.5) else { print(noFrames); return nil }
     func mask(_ lit: [Double]) -> [Int] {
         let gains = zip(lit, dark).map { $0 - $1 }
         guard let best = gains.max(), best > 0.08 else { return [] }
@@ -273,8 +289,8 @@ func cameraCurve(camera: Camera, patches: Patches, builtIn: BuiltInBrightness, b
     }
 
     patches.fill(builtInID, gray: gray); patches.fill(externalID, gray: gray)
-    func ratio() -> Double {
-        let grid = camera.grid(after: 0.9)
+    func ratio() -> Double? {
+        guard let grid = camera.grid(after: 0.9) else { return nil }
         let mean = { (cells: [Int]) in cells.map { grid[$0] }.reduce(0, +) / Double(cells.count) }
         return mean(externalCells) / max(mean(builtInCells), 0.001)
     }
@@ -285,13 +301,15 @@ func cameraCurve(camera: Camera, patches: Patches, builtIn: BuiltInBrightness, b
         // Bisection on the external level: brightness grows with the level on both paths.
         var low = minimum, high = 1.0
         setExternal(high)
-        if ratio() < 1 {
+        guard let atMaximum = ratio() else { print(noFrames); return nil }
+        if atMaximum < 1 {
             low = high
         } else {
             for _ in 0..<7 {
                 let middle = (low + high) / 2
                 setExternal(middle)
-                if ratio() < 1 { low = middle } else { high = middle }
+                guard let current = ratio() else { print(noFrames); return nil }
+                if current < 1 { low = middle } else { high = middle }
             }
         }
         let match = (low + high) / 2
@@ -311,8 +329,11 @@ func manualCurve(patches: Patches, builtIn: BuiltInBrightness, builtInID: CGDire
     var level = 0.5
     var validated = false
     var cancelled = false
+    // Any handled key counts as activity, even one that changes nothing (↑ at 100 %).
+    var lastKey = Date()
     let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
         let fast = event.modifierFlags.contains(.shift)
+        lastKey = Date()
         switch event.keyCode {
         case 126: level = min(1, level + (fast ? 0.1 : 0.02))
         case 125: level = max(minimum, level - (fast ? 0.1 : 0.02))
@@ -333,12 +354,10 @@ func manualCurve(patches: Patches, builtIn: BuiltInBrightness, builtInID: CGDire
         patches.caption(builtInID, String(format: "Mac : %.0f %%   (%d/%d)", target * 100, index + 1, levels.count))
         patches.focus(externalID)
         var shown = -1.0
-        var lastKey = Date()
-        var lastLevel = level
+        lastKey = Date()
         while !validated {
             if cancelled { return nil }
             // The gray windows cover every screen: give up if nobody is at the keyboard.
-            if level != lastLevel { lastLevel = level; lastKey = Date() }
             if Date().timeIntervalSince(lastKey) > 120 {
                 print("Aucune touche depuis 2 min : calibration arrêtée.")
                 return nil
