@@ -83,7 +83,9 @@ struct PanelView: View {
             Divider().padding(.vertical, 4)
 
             VStack(alignment: .leading, spacing: 8) {
-                if sync.available {
+                // Shown while on even when the built-in display can't be read (lid closed), so
+                // following can always be turned off.
+                if sync.available || sync.enabled {
                     SwitchRow("Follow the built-in display's brightness", isOn: $sync.enabled)
                 }
                 SwitchRow("Brightness keys adjust the display under the pointer", isOn: $keys.enabled)

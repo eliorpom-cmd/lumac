@@ -40,16 +40,26 @@ final class DisplayController: ObservableObject {
 
     var brightness: Double? { levels[.brightness] }
 
+    /// Called after a refresh caused by a wake or a display change, once the display has been
+    /// looked up again. `BrightnessSync` uses it to send the followed level again.
+    var onDisplayChange: (() -> Void)?
+
+    /// The display the brightness controls act on, when it is known: the DDC display, or the one
+    /// dimmed through its gamma table. The keys use it to leave other screens alone.
+    var controlledDisplayID: CGDirectDisplayID? {
+        softwareDimming ? dimmer.displayID : display?.displayID
+    }
+
     init() {
-        refresh()
+        refresh(afterDisplayChange: true)
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refresh() }
+            MainActor.assumeIsolated { self?.refresh(afterDisplayChange: true) }
         }
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refresh() }
+            MainActor.assumeIsolated { self?.refresh(afterDisplayChange: true) }
         }
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
@@ -58,8 +68,13 @@ final class DisplayController: ObservableObject {
         }
     }
 
-    /// Finds the display again and reads its settings, after a wake or a display change.
-    func refresh() {
+    /// Finds the display again and reads its settings.
+    ///
+    /// - Parameter afterDisplayChange: true after a wake or a display change, when macOS may have
+    ///   reset the gamma tables and the display may be a different one. A plain refresh, when the
+    ///   panel opens, re-reads the levels only: recapturing the gamma table there restored every
+    ///   display to its profile first, a visible flash on each click of the menu bar icon.
+    func refresh(afterDisplayChange: Bool = false) {
         let forceSoftware = forceSoftwareDimming
         queue.async { [weak self] in
             let display = forceSoftware ? nil : DDCDisplay.externalDisplays().first
@@ -86,7 +101,9 @@ final class DisplayController: ObservableObject {
                 if let display, !readings.isEmpty {
                     self.log.info("DDC ready (\(display.addressing.description, privacy: .public))")
                 }
-                self.updateSoftwareDimming(ddcBrightness: readings[.brightness] != nil)
+                self.updateSoftwareDimming(ddcBrightness: readings[.brightness] != nil,
+                                           recapture: afterDisplayChange)
+                if afterDisplayChange { self.onDisplayChange?() }
             }
         }
     }
@@ -118,7 +135,7 @@ final class DisplayController: ObservableObject {
 
     /// Falls back to the gamma table when an external display is connected but its brightness
     /// can't be set over DDC, and gives the picture back its profile once DDC works again.
-    private func updateSoftwareDimming(ddcBrightness: Bool) {
+    private func updateSoftwareDimming(ddcBrightness: Bool, recapture: Bool) {
         guard !ddcBrightness, let id = externalDisplayID() else {
             if softwareDimming { log.info("Software dimming off") }
             softwareDimming = false
@@ -130,7 +147,8 @@ final class DisplayController: ObservableObject {
         softwareDimming = true
         levels[.brightness] = level
         // macOS resets gamma tables after display changes and wakes: capture and dim again.
-        dimmer.invalidate()
+        // Otherwise the captured table is reused, without going through the profile.
+        if recapture { dimmer.invalidate() }
         dimmer.apply(level, to: id)
     }
 
@@ -145,13 +163,17 @@ final class DisplayController: ObservableObject {
     /// Switches the display to another input: the picture leaves this Mac until it switches back.
     func selectInput(_ source: UInt8) {
         guard let display else { return }
+        let previous = input
         input = source
         queue.async { [weak self] in
             do {
                 try display.write(.input, value: UInt16(source))
             } catch {
                 DispatchQueue.main.async {
-                    self?.log.error("Input switch failed: \(String(describing: error), privacy: .public)")
+                    guard let self else { return }
+                    self.log.error("Input switch failed: \(String(describing: error), privacy: .public)")
+                    // The display didn't switch: the menu must not show that it did.
+                    if self.input == source { self.input = previous }
                 }
             }
         }

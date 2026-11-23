@@ -51,6 +51,14 @@ final class BrightnessSync: ObservableObject {
     init(display: DisplayController) {
         self.display = display
         enabled = UserDefaults.standard.bool(forKey: "syncBrightness")
+        // A display found again (replugged, replaced, after a wake) comes back at its own level:
+        // forget the last reading so the next tick sends the followed level, instead of waiting
+        // for the built-in display to move by 1 %.
+        display.onDisplayChange = { [weak self] in
+            guard let self, self.enabled else { return }
+            self.lastBuiltIn = nil
+            self.follow()
+        }
         update()
     }
 

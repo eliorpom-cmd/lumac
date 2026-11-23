@@ -119,6 +119,14 @@ final class BrightnessKeys: ObservableObject {
 
         // The built-in display keeps the behaviour and indicator of macOS.
         if builtInTarget { return false }
+        // With several external displays, Lumac drives only one: a key aimed at another screen
+        // goes on to macOS instead of changing the wrong display. Only checked then, so a
+        // single external display never depends on the DDC lookup matching CoreGraphics' ID.
+        if NSScreen.screens.filter({ !Self.isBuiltIn($0) }).count > 1,
+           let controlled = display.controlledDisplayID,
+           let id = screen.flatMap(Self.displayID(of:)), id != controlled {
+            return false
+        }
 
         guard keyDown else { return display.brightness != nil }
         guard display.step(.brightness, by: delta), let level = display.brightness else { return false }
@@ -134,7 +142,10 @@ final class BrightnessKeys: ObservableObject {
     }
 
     private static func isBuiltIn(_ screen: NSScreen) -> Bool {
-        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
-            .map { CGDisplayIsBuiltin($0) != 0 } ?? false
+        displayID(of: screen).map { CGDisplayIsBuiltin($0) != 0 } ?? false
+    }
+
+    private static func displayID(of screen: NSScreen) -> CGDirectDisplayID? {
+        screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
     }
 }
